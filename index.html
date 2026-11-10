@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SKATE RUSH 3D</title>
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0;height:100%;overflow:hidden;background:#1a0b3a;font-family:'Trebuchet MS',Impact,sans-serif;color:#fff}
+canvas{display:block}
+.h{position:fixed;pointer-events:none;font-weight:900;text-shadow:0 3px 0 #000a}
+#score{left:18px;top:14px;font-size:34px;color:#ffe600}
+#time{left:50%;transform:translateX(-50%);top:10px;font-size:54px}
+#combo{left:50%;transform:translateX(-50%);top:78px;font-size:26px;color:#00e5ff}
+#spd{left:18px;bottom:16px;font-size:24px;color:#7cff3a}
+#help{right:14px;bottom:12px;font-size:12px;opacity:.85;text-align:right;line-height:1.5}
+#pop{left:50%;top:26%;transform:translateX(-50%);text-align:center}
+.pp{font-size:30px;color:#fff;animation:up 1.3s forwards;white-space:nowrap}
+@keyframes up{from{opacity:1;transform:translateY(0) scale(1.3)}to{opacity:0;transform:translateY(-60px) scale(1)}}
+#balw{left:50%;transform:translateX(-50%);bottom:90px;width:260px;height:16px;border:3px solid #fff;border-radius:10px;background:#0008;display:none}
+#balm{position:absolute;top:-4px;width:10px;height:20px;background:#ff2d95;border-radius:5px;left:50%}
+.ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:radial-gradient(ellipse at center,#2b0b5a99,#0a0220dd);padding:16px;box-sizing:border-box}
+h1{margin:0;font-size:clamp(46px,12vw,130px);font-style:italic;letter-spacing:2px;background:linear-gradient(90deg,#ff2d95,#ffe600,#7cff3a,#00e5ff,#9b5cff,#ff2d95);background-size:300%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:hue 4s linear infinite}
+@keyframes hue{to{background-position:300% 0}}
+.sub{font-size:clamp(14px,2.6vw,22px);margin:6px 0 18px;color:#ffd6f0}
+.keys{display:grid;grid-template-columns:repeat(2,auto);gap:6px 22px;font-size:15px;text-align:left;margin-bottom:22px;background:#0006;padding:14px 20px;border-radius:14px;border:2px solid #ff2d95}
+.keys b{color:#ffe600}
+button{font:900 30px 'Trebuchet MS',Impact,sans-serif;padding:14px 46px;border:4px solid #fff;border-radius:60px;color:#fff;background:linear-gradient(90deg,#ff2d95,#ff7a00);cursor:pointer;box-shadow:0 8px 0 #7a0a4a;animation:pl 1s infinite alternate}
+@keyframes pl{to{transform:scale(1.07)}}
+#end{display:none}
+</style></head><body>
+<div class="h" id="score">0</div><div class="h" id="time">60</div><div class="h" id="combo"></div>
+<div class="h" id="spd"></div><div class="h" id="pop"></div><div class="h" id="balw"><div id="balm"></div></div>
+<div class="h" id="help">←→ virar/girar · ↑ remar · ↓ frear<br>ESPAÇO ollie · J kickflip · K grab (segure) · L backflip</div>
+<div class="ov" id="menu"><h1>SKATE RUSH</h1><div class="sub">Desça a ladeira, voe nas rampas, deslize nos corrimões. Vá e volte pela pista, as rampas funcionam dos dois lados! 60 segundos!</div>
+<div class="keys"><span><b>← →</b> virar / girar no ar</span><span><b>↑ ↓</b> remar / frear</span><span><b>ESPAÇO</b> ollie / pular do corrimão</span><span><b>J</b> kickflip (+250)</span><span><b>K</b> grab (segure no ar)</span><span><b>L</b> backflip (+400)</span><span><b>No corrimão</b> ← → equilibra</span><span><b>Manobras</b> some pontos e combos</span></div>
+<button id="go">JOGAR</button></div>
+<div class="ov" id="end"><h1 style="font-size:clamp(40px,9vw,90px)">TEMPO!</h1><div class="sub" id="fin" style="font-size:32px"></div><button id="again">JOGAR DE NOVO</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const T=window.THREE;if(!T){document.body.innerHTML='<div style="padding:30px;color:white;background:#16052d;font:20px sans-serif">Não foi possível carregar o motor 3D. Verifique sua conexão com a internet e recarregue o jogo.</div>';throw new Error('Three.js não carregou');}const $=i=>document.getElementById(i),PI=Math.PI,rand=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.random()*a.length|0];
+const COL=['#e8e1d0','#d9a441','#c0453a','#3f7fa6','#7a9a6a','#f2f2f2','#d8782e'];
+const mat=c=>new T.MeshLambertMaterial({color:c});
+function cv(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return[c,c.getContext('2d')]}
+let R;try{R=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});R.setPixelRatio(Math.min(window.devicePixelRatio||1,2));R.setClearColor(0xa9b4c0,1);document.body.prepend(R.domElement);R.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();RUN=0;pop('Gráfico reiniciado. Recarregue a página.','#ff4d4d');});}catch(err){document.body.innerHTML='<div style="padding:30px;color:white;background:#16052d;font:20px sans-serif">Seu navegador não conseguiu iniciar o gráfico 3D (WebGL). Atualize o navegador ou habilite a aceleração de hardware.</div>';throw err;}
+const S=new T.Scene(),C=new T.PerspectiveCamera(68,1,.1,500);
+function rs(){R.setSize(innerWidth,innerHeight);C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix()}addEventListener('resize',rs);rs();
+{const[c,x]=cv(2,256),g=x.createLinearGradient(0,0,0,256);g.addColorStop(0,'#46586e');g.addColorStop(.5,'#9aa7b5');g.addColorStop(1,'#e9c9a0');x.fillStyle=g;x.fillRect(0,0,2,256);S.background=new T.CanvasTexture(c)}
+S.fog=new T.Fog(0xa9b4c0,70,260);
+S.add(new T.HemisphereLight(0xffffff,0x6b7380,.9));const dl=new T.DirectionalLight(0xfff0d0,.6);dl.position.set(20,40,10);S.add(dl);
+// ---- mundo
+const B=z=>z>=0?14:z>-70?14+.2*z:z>-130?0:z>-152?(-130-z)*.35:7.7;
+const RP=[{x:8,z:-35,w:8,L:10,h:2.4},{x:0,z:-80,w:10,L:12,h:3},{x:-13,z:-104,w:8,L:10,h:2.4},{x:13,z:-104,w:8,L:10,h:2.4}];
+const RL=[[-20,-74,-20,-102],[20,-78,20,-106],[0,-102,0,-126],[-17,-14,-17,-52]].map(([ax,az,bx,bz],i)=>({ax,az,bx,bz,ay:B(az)+.8,by:B(bz)+.8,id:i}));
+function H(x,z){let h=B(z);for(const r of RP)if(Math.abs(x-r.x)<=r.w/2&&z<=r.z&&z>=r.z-r.L){const t=(r.z-z)/r.L;h+=r.h*(1-Math.abs(2*t-1));break}return h}
+// Inclinação local da pista: mantém a prancha paralela ao piso e às rampas.
+function slopeAt(x,z,a){const dx=Math.sin(a),dz=-Math.cos(a),d=.35;return (H(x+dx*d,z+dz*d)-H(x-dx*d,z-dz*d))/(2*d)}
+{const[gc,gx]=cv(256,256);gx.fillStyle='#5a5d61';gx.fillRect(0,0,256,256);for(let i=0;i<8;i++)for(let j=0;j<8;j++){gx.fillStyle=pick(['#8b8e92','#85888c','#90939a','#7d8085']);gx.fillRect(i*32+1,j*32+1,30,30)}
+const gt=new T.CanvasTexture(gc);gt.wrapS=gt.wrapT=T.RepeatWrapping;gt.repeat.set(4,11);
+const gg=new T.PlaneGeometry(64,176,16,88);gg.rotateX(-PI/2);gg.translate(0,0,-78);const gp=gg.attributes.position;for(let i=0;i<gp.count;i++)gp.setY(i,B(gp.getZ(i)));gg.computeVertexNormals();
+S.add(new T.Mesh(gg,new T.MeshLambertMaterial({map:gt})))}
+RP.forEach(r=>{const zm=r.z-r.L/2,ym=B(zm)+r.h;[[r.z,B(r.z),zm,ym],[zm,ym,r.z-r.L,B(r.z-r.L)]].forEach(([za,ya,zb,yb])=>{const dz=za-zb,dy=yb-ya,len=Math.hypot(dz,dy),m=new T.Mesh(new T.BoxGeometry(r.w,.3,len),mat('#8a8d91'));m.position.set(r.x,(ya+yb)/2-.15,(za+zb)/2);m.rotation.x=Math.atan2(dy,dz);S.add(m)})});
+RL.forEach(r=>{const a=new T.Vector3(r.ax,r.ay,r.az),b=new T.Vector3(r.bx,r.by,r.bz),g=new T.CylinderGeometry(.09,.09,a.distanceTo(b),8);g.rotateX(PI/2);const m=new T.Mesh(g,mat('#c8ccd0'));m.position.copy(a).add(b).multiplyScalar(.5);m.lookAt(b);S.add(m);
+[0,.5,1].forEach(k=>{const p=a.clone().lerp(b,k),h=new T.Mesh(new T.BoxGeometry(.2,p.y,.2),mat('#3a3d42'));h.position.set(p.x,p.y/2,p.z);S.add(h)})});
+function graf(){const[c,x]=cv(512,256);x.fillStyle=pick(['#6e7074','#5b5e63','#7a756d','#4f5358']);x.fillRect(0,0,512,256);
+for(let i=0;i<16;i++){x.fillStyle=pick(COL)+'66';x.beginPath();x.arc(rand(0,512),rand(0,256),rand(8,50),0,7);x.fill()}
+x.font='900 84px Impact,sans-serif';x.lineWidth=10;x.lineJoin='round';
+['SKATE','RAD','FLOW','AIR','STYLE','GRIND','OLLIE','PUNK'].sort(()=>Math.random()-.5).slice(0,2).forEach((w,i)=>{x.save();x.translate(rand(20,200),90+i*110);x.rotate(rand(-.2,.2));x.strokeStyle=pick(['#000','#fff']);x.fillStyle=pick(COL);x.strokeText(w,0,0);x.fillText(w,0,0);x.restore()});
+for(let i=0;i<16;i++){x.fillStyle=pick(COL);x.fillRect(rand(0,512),rand(0,200),4,rand(10,50))}
+return new T.CanvasTexture(c)}
+const GT=[0,1,2,3,4].map(graf);
+for(let z=10;z>-165;z-=10){const zc=z-5,yc=B(zc);for(const s of[-1,1]){const w=new T.Mesh(new T.BoxGeometry(1,14,10),mat('#55585c'));w.position.set(s*26.5,yc+3,zc);S.add(w);
+const p=new T.Mesh(new T.PlaneGeometry(9.6,6.5),new T.MeshBasicMaterial({map:pick(GT)}));p.position.set(s*25.95,yc+3.2,zc);p.rotation.y=-s*PI/2;S.add(p)}}
+[[10.5,14,PI,9.9],[-166.5,7.7,0,-165.9]].forEach(([z,y,ry,pz],i)=>{const w=new T.Mesh(new T.BoxGeometry(54,14,1),mat('#55585c'));w.position.set(0,y+3,z);S.add(w);const p=new T.Mesh(new T.PlaneGeometry(40,8),new T.MeshBasicMaterial({map:GT[i]}));p.position.set(0,y+3.5,pz);p.rotation.y=ry;S.add(p)});
+{const c=new T.Mesh(new T.CylinderGeometry(.15,.15,52,8),mat('#c8ccd0'));c.rotation.z=PI/2;c.position.set(0,7.75,-152);S.add(c)}
+for(let z=0;z>-165;z-=30)for(const s of[-1,1]){const y=B(z),p=new T.Mesh(new T.CylinderGeometry(.1,.12,7,6),mat('#3a3d42'));p.position.set(s*24,y+3.5,z);S.add(p);const l=new T.Mesh(new T.BoxGeometry(.9,.15,.4),new T.MeshBasicMaterial({color:0xfff2c0}));l.position.set(s*23.4,y+7,z);S.add(l)}
+const BT=['#7b6f66','#8a8d90','#9a735c','#5f6a75'].map(c=>{const[k,x]=cv(128,256);x.fillStyle=c;x.fillRect(0,0,128,256);for(let i=0;i<8;i++)for(let j=0;j<16;j++){x.fillStyle=Math.random()<.25?'#f3d98a':'#2c333b';x.fillRect(8+i*15,8+j*15,9,10)}return new T.CanvasTexture(k)});
+for(let i=0;i<60;i++){const s=pick([-1,1]),bz=rand(-175,10),h=rand(15,45),m=new T.Mesh(new T.BoxGeometry(rand(8,16),h,rand(8,16)),new T.MeshLambertMaterial({map:pick(BT)}));m.position.set(s*rand(34,62),B(bz)+h/2-3,bz);S.add(m)}
+// ---- skatista
+const sk=new T.Group();sk.rotation.order='YXZ';const bd=new T.Group();sk.add(bd);
+// Shape de deck com nose/tail arredondados e bordas chanfradas.
+const deckShape=new T.Shape();
+deckShape.moveTo(-.17,-.85);deckShape.quadraticCurveTo(-.25,-.85,-.25,-.69);deckShape.lineTo(-.25,.69);deckShape.quadraticCurveTo(-.25,.85,-.17,.85);deckShape.lineTo(.17,.85);deckShape.quadraticCurveTo(.25,.85,.25,.69);deckShape.lineTo(.25,-.69);deckShape.quadraticCurveTo(.25,-.85,.17,-.85);deckShape.closePath();
+const deckGeo=new T.ExtrudeGeometry(deckShape,{depth:.075,bevelEnabled:true,bevelSegments:4,steps:1,bevelSize:.035,bevelThickness:.025,curveSegments:12});deckGeo.rotateX(-PI/2);deckGeo.translate(0,.12,0);
+const bm=new T.Mesh(deckGeo,mat('#b5472f'));bd.add(bm);bd.scale.set(.8,1,.8); // shape do skate 20% menor, mantendo a altura e o encaixe dos pés
+[[-.2,-.6],[.2,-.6],[-.2,.6],[.2,.6]].forEach(([x,z])=>{const w=new T.Mesh(new T.SphereGeometry(.1,10,8),mat('#e8e8e8'));w.position.set(x,.1,z);bd.add(w)});
+// Pés e tronco ficam de lado em relação ao comprimento do skate.
+const bo=new T.Group();bo.rotation.y=PI/2;bo.scale.setScalar(.88);bo.position.y=.03;sk.add(bo);
+const lb=(l,a,b,c)=>{const g=new T.CylinderGeometry(a,b,l,10);g.translate(0,-l/2,0);return new T.Mesh(g,mat(c))};
+const JN='#33475f',HD='#3b3f46',SN='#d6a67c';
+const legs=[];[-1,1].forEach(s=>{const th=new T.Group();th.position.set(s*.15,1.15,0);th.rotation.z=s*.55;th.add(lb(.5,.11,.085,JN));const sh=new T.Group();sh.position.y=-.5;sh.rotation.z=-s*.55;sh.add(lb(.5,.085,.06,JN));const ft=new T.Mesh(new T.BoxGeometry(.13,.1,.3),mat('#e9e9e9'));ft.position.set(0,-.46,.06);sh.add(ft);th.add(sh);bo.add(th);legs.push({s,th,sh})});
+const tr=lb(.72,.21,.17,HD);tr.position.y=1.88;bo.add(tr);
+const A=[-1,1].map(s=>{const g=new T.Group();g.position.set(s*.27,1.8,0);g.add(lb(.32,.065,.055,HD));const e=new T.Group();e.position.y=-.32;e.rotation.x=-.35;e.add(lb(.3,.05,.04,SN));const h=new T.Mesh(new T.SphereGeometry(.05,8,8),mat(SN));h.position.y=-.3;e.add(h);g.add(e);bo.add(g);return g});
+const arL=A[0],arR=A[1];
+const hg=new T.Group();hg.position.y=1.98;hg.rotation.y=PI/2;bo.add(hg);
+const hd=new T.Mesh(new T.SphereGeometry(.14,12,10),mat(SN));hg.add(hd);
+const cpm=new T.Mesh(new T.SphereGeometry(.15,12,8,0,2*PI,0,PI/2),mat('#1f2226'));cpm.position.y=.02;hg.add(cpm);
+const br=new T.Mesh(new T.BoxGeometry(.2,.02,.14),mat('#1f2226'));br.position.set(0,.04,.15);hg.add(br);
+const nk=lb(.1,.05,.05,SN);nk.position.y=1.9;bo.add(nk);sk.scale.setScalar(3);S.add(sk);
+// ---- jogo
+let AC;function snd(f,d=.1,ty='square'){try{AC=AC||new AudioContext();const o=AC.createOscillator(),g=AC.createGain();o.type=ty;o.frequency.value=f;g.gain.value=.05;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.stop(AC.currentTime+d)}catch(e){}}
+function pop(t,c){const d=document.createElement('div');d.className='pp';d.textContent=t;if(c)d.style.color=c;$('pop').appendChild(d);setTimeout(()=>d.remove(),1300)}
+const mkP=()=>({x:0,y:14,z:3,a:0,s:0,vx:0,vz:0,vy:0,mode:'ride',sp:0,spT:0,sd:0,kA:0,pA:0,gT:0,gd:0,grab:0,cp:0,cm:0,bk:0,bt:0,qs:0,qj:0,ql:0,r:null,t:0,gs:1,gsp:0,bal:0,rc:0,dead:0,sv:0,landT:0});
+let P=mkP(),K={},RUN=0,TL=60,SC=0,TM=0,camA=0;
+const air0=()=>{P.sp=P.spT=P.sd=P.kA=P.pA=P.gT=P.gd=0;P.grab=0;P.sv=0};
+const trick=(n,p)=>{P.cp+=p;P.cm++;pop(n+' +'+p);snd(450+P.cm*60,.1)};
+function bank(){const p=Math.round(P.cp*Math.max(1,P.cm));SC+=p;pop('+'+p+' PONTOS!','#7cff3a');snd(700,.2,'triangle');P.cp=0;P.cm=0}
+function bail(){P.mode='bail';P.bt=1.3;P.cp=0;P.cm=0;P.kA=0;P.pA=0;P.sp=0;P.spT=0;P.sv=0;P.landT=0;const v=Math.hypot(P.vx,P.vz);if(v>1)P.a=Math.atan2(P.vx,-P.vz);P.s=v*.4;P.vy=0;pop('BAIL!','#ff4d4d');snd(90,.3,'sawtooth')}
+function land(h){const m=((P.sp%PI)+PI)%PI,e=Math.min(m,PI-m),pe=P.pA?Math.min(P.pA,2*PI-P.pA):0;P.y=h;
+ if(P.dead||e>.85||pe>1||P.vy<-32){P.dead=0;bail();return}
+ P.mode='ride';P.s=Math.min(48,Math.hypot(P.vx,P.vz)*.98);if(P.s>1)P.a=Math.atan2(P.vx,-P.vz);P.vy=0;P.sv=P.sp-2*PI*Math.round(P.sp/(2*PI));P.sp=0;P.kA=0;P.pA=0;P.landT=.30;P.bk=.9;snd(120,.08,'triangle')}
+function tryGrind(){for(const r of RL){const ex=r.bx-r.ax,ez=r.bz-r.az,t=((P.x-r.ax)*ex+(P.z-r.az)*ez)/(ex*ex+ez*ez);if(t<0||t>1)continue;
+ const d=Math.hypot(P.x-r.ax-ex*t,P.z-r.az-ez*t),dy=P.y-(r.ay+(r.by-r.ay)*t);
+ if(d<1.3&&dy<.6&&dy>-.7){P.mode='grind';P.r=r;P.t=t;P.gs=(P.vx*ex+P.vz*ez)>=0?1:-1;P.gsp=Math.max(11,Math.hypot(P.vx,P.vz));P.bal=0;trick('GRIND',250);snd(220,.15,'sawtooth');return}}}
+function step(dt){
+ TM+=dt;const st=(K.ArrowRight||K.KeyD?1:0)-(K.ArrowLeft||K.KeyA?1:0);
+ if(P.mode==='ride'||P.mode==='bail'){
+  const ctl=P.mode==='ride';
+  if(ctl){P.a+=st*dt*1.3*(.65+1.2/(1+P.s*.12));if(K.ArrowUp||K.KeyW)P.s=Math.min(P.s+9.75*dt,31.2);if(K.ArrowDown||K.KeyS)P.s=Math.max(0,P.s-15*dt)}
+  else{P.bt-=dt;if(P.bt<=0)P.mode='ride'}
+  const dx=Math.sin(P.a),dz=-Math.cos(P.a);
+  const slope=(H(P.x+dx*.8,P.z+dz*.8)-H(P.x,P.z))/.8;P.s+=-slope*9.81*dt;const rolling=ctl?.10:1.8;P.s=Math.max(0,Math.min(39,P.s*Math.max(0,1-rolling*dt)));
+  const rx=P.x+dx*P.s*dt,rz=P.z+dz*P.s*dt;if(Math.abs(rx)>25){P.a=-P.a;P.s*=.6;snd(100,.06,'triangle')}else if(rz<-163||rz>9){P.a=PI-P.a;P.s*=.6;snd(100,.06,'triangle')}
+  const oldX=P.x,oldZ=P.z;
+  const nx=Math.max(-25,Math.min(25,rx)),nz=Math.max(-163,Math.min(9,rz)),nh=H(nx,nz);
+  // A prancha acompanha o perfil da pista. Ao cruzar o topo de uma rampa,
+  // recebe impulso vertical e sai da superfície como em uma rampa de skate.
+  P.vy=(nh-P.y)/Math.max(dt,.0001);P.x=nx;P.z=nz;P.y=nh;
+  let crest=null;
+  for(const r of RP){
+   const mid=r.z-r.L/2;
+   if(Math.abs(nx-r.x)<=r.w*.48 &&
+      ((dz<0&&oldZ>mid&&nz<=mid)||(dz>0&&oldZ<mid&&nz>=mid))){
+    crest=r;break;
+   }
+  }
+  if(ctl&&crest&&P.s>3){
+   const rampSlope=Math.abs((H(crest.x,crest.z-0.35)-H(crest.x,crest.z+0.35))/0.7);
+   P.mode='air';P.vx=dx*P.s;P.vz=dz*P.s;
+   P.vy=Math.max(5.5,Math.min(15,P.s*(.30+Math.min(.25,rampSlope*.08))));
+   P.y=nh+.08;P.rc=.22;air0();snd(360,.12,'triangle');
+  }
+  if(ctl&&P.qs&&P.mode==='ride'){P.vy=9.5;P.vx=dx*P.s;P.vz=dz*P.s;P.mode='air';air0();P.y+=.05;snd(300,.08)}
+ }else if(P.mode==='air'){
+  P.vy-=12.753*dt; /* gravidade 30% mais intensa */ P.vx*=Math.max(0,1-.035*dt);P.vz*=Math.max(0,1-.035*dt);P.x+=P.vx*dt;P.z+=P.vz*dt;P.y+=P.vy*dt;if(Math.abs(P.x)>25){P.x=Math.sign(P.x)*25;P.vx=0}if(P.z<-163||P.z>9){P.z=Math.max(-163,Math.min(9,P.z));P.vz=0}
+  if(st){const d=st*7*dt;P.sp+=d;P.spT+=Math.abs(d)}
+  const n=Math.floor(P.spT/PI+.3);if(n>P.sd){P.sd=n;trick(n*180+'° GIRO',100*n)}
+  if(P.qj&&!P.kA)P.kA=.01;if(P.kA){P.kA+=13*dt;if(P.kA>=2*PI){P.kA=0;trick('KICKFLIP',250)}}
+  if(P.ql&&!P.pA)P.pA=.01;if(P.pA){P.pA+=10.8*dt;if(P.pA>=2*PI){P.pA=0;trick('BACKFLIP',400)}}
+  P.grab=K.KeyK?1:0;if(P.grab){P.cp+=80*dt;P.gT+=dt;if(P.gT>.5&&!P.gd){P.gd=1;trick('GRAB',150)}}
+  P.rc-=dt;if(P.rc<=0&&P.vy<=1)tryGrind();
+  if(P.mode==='air'){const h=H(P.x,P.z);if(P.y<=h&&P.vy<=0)land(h)}
+ }else if(P.mode==='grind'){
+  const r=P.r,ex=r.bx-r.ax,ez=r.bz-r.az,L=Math.hypot(ex,ez);
+  P.t+=P.gs*P.gsp*dt/L;P.bal+=((Math.sin(TM*3.1+r.id)+.6*Math.cos(TM*1.9))*.9+P.bal*.9)*dt+st*1.9*dt;P.cp+=450*dt;
+  const tt=Math.max(0,Math.min(1,P.t));P.x=r.ax+ex*tt;P.z=r.az+ez*tt;P.y=r.ay+(r.by-r.ay)*tt;P.a=Math.atan2(ex*P.gs,-ez*P.gs);
+  P.vx=ex/L*P.gs*P.gsp;P.vz=ez/L*P.gs*P.gsp;P.vy=(r.by-r.ay)/L*P.gs*P.gsp;
+  if(Math.abs(P.bal)>1){P.cp=0;P.cm=0;P.mode='air';air0();P.dead=1;P.rc=.4;pop('CAIU!','#ff4d4d')}
+  else if(P.qs){P.mode='air';air0();P.vy=8;P.rc=.4;snd(300,.08)}
+  else if(P.t<0||P.t>1){P.mode='air';air0();P.vy=Math.max(P.vy,2);P.rc=.4;trick('RAIL COMPLETO',600)}
+ }
+ P.qs=P.qj=P.ql=0;
+ if(P.mode==='ride'&&P.cp>0){P.bk-=dt;if(P.bk<=0)bank()}
+ 
+ // Visual: joelhos flexionam no impulso e absorvem o impacto na aterrissagem.
+ P.landT=Math.max(0,P.landT-dt);const tuck=P.mode==='air'?Math.max(0,Math.min(1,(P.vy+5)/18)):0;const impact=P.landT>0?P.landT/.30:0;const kneeBend=.72*tuck+.95*impact+(P.mode==='ride'?.05:0);legs.forEach(({s,th,sh})=>{th.rotation.z=s*(.55+.18*tuck+.12*impact);sh.rotation.z=-s*(.55+kneeBend);});
+ // visual
+ sk.position.set(P.x,P.y,P.z);const lean=P.mode==='ride'?-st*.3*Math.min(1,P.s/12):0;
+ P.sv-=P.sv*Math.min(1,9*dt);const groundPitch=(P.mode==='ride')?Math.atan(slopeAt(P.x,P.z,P.a)):0;sk.rotation.set((P.mode==='bail'?-1.4:P.pA)+groundPitch,-P.a-P.sp+P.sv,lean);bd.rotation.z=P.kA;bd.position.y=P.grab?.5:0;arL.rotation.z=P.grab?-1.5:-.3;arR.rotation.z=P.grab?1.5:.3;
+ camA+=Math.atan2(Math.sin(P.a-camA),Math.cos(P.a-camA))*Math.min(1,3*dt);const cx=Math.sin(camA),cz=-Math.cos(camA);
+ const sp=(P.mode==='ride'||P.mode==='bail')?P.s:Math.hypot(P.vx,P.vz);
+ C.position.lerp(new T.Vector3(P.x-cx*9.5,Math.max(P.y,H(P.x,P.z))+6.2,P.z-cz*9.5),Math.min(1,6*dt));C.lookAt(P.x+cx*6.2,P.y+3.1,P.z+cz*6.2);C.fov=68+sp*.35;C.updateProjectionMatrix();
+ $('score').textContent='⭐ '+Math.round(SC);$('time').textContent=Math.ceil(TL);$('spd').textContent=Math.round(sp*3.6)+' km/h';
+ $('combo').textContent=P.cp>0?Math.round(P.cp)+' × '+Math.max(1,P.cm):'';
+ $('balw').style.display=P.mode==='grind'?'block':'none';$('balm').style.left=(50+Math.max(-1,Math.min(1,P.bal))*48)+'%';
+}
+function start(){P=mkP();RUN=1;TL=60;SC=0;TM=0;camA=0;rs();C.position.set(0,20,14);C.lookAt(0,17,0);$('menu').style.display='none';$('end').style.display='none';if(AC&&AC.resume)AC.resume()}
+function endGame(){RUN=0;if(P.cp>0)bank();let b=0;try{b=+localStorage.getItem('skrush')||0;if(SC>b){b=SC;localStorage.setItem('skrush',b)}}catch(e){b=Math.max(b,SC)}
+ $('fin').innerHTML='Pontuação: <b style="color:#ffe600">'+Math.round(SC)+'</b><br>Recorde: '+Math.round(b);$('end').style.display='flex';$('balw').style.display='none'}
+$('go').onclick=start;$('again').onclick=start;
+addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();K[e.code]=1;if(e.repeat)return;
+ if(e.code==='Space')P.qs=1;if(e.code==='KeyJ')P.qj=1;if(e.code==='KeyL')P.ql=1;if(e.code==='Enter'&&!RUN)start()});
+addEventListener('keyup',e=>K[e.code]=0);addEventListener('blur',()=>K={});
+let last=performance.now();
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.033,(now-last)/1000);last=now;
+ if(RUN){TL-=dt;if(TL<=0){TL=0;endGame()}else step(dt)}
+ else{const t=now/4000;sk.position.set(0,0,-100);sk.rotation.set(0,now/600,0);bd.rotation.z=0;C.position.set(Math.sin(t)*30,11,-100+Math.cos(t)*30);C.lookAt(0,3,-100)}
+ R.render(S,C)}
+requestAnimationFrame(loop);
+</script></body></html>
